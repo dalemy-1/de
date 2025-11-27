@@ -198,12 +198,14 @@
       font-size: 0.8rem;
     }
     .card-soft li + li { margin-top: 4px; }
-
-    /* 原来的筛选/搜索条，按你的 C 模式，直接隐藏 */
     .controls-bar {
-      display: none;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
     }
-
     .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
     .chip {
       border-radius: 999px;
@@ -265,7 +267,6 @@
       box-shadow: 0 12px 22px rgba(37, 99, 235, 0.7);
     }
     .product-count { font-size: 0.76rem; color: #6b7280; }
-
     .grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -511,15 +512,16 @@
             <span>Associates ID: de0831-21</span>
           </span>
           <span class="badge-soft">
-            Real product images &amp; ASINs &bull;
+            5 broad usage categories &bull; Real product images &amp; ASINs &bull;
             Direct /dp/ links with tag
           </span>
         </div>
         <div class="key-points">
-          <span>Everyday picks</span>
-          <span>Home &amp; Office</span>
-          <span>Practical use-cases</span>
-          <span>Quick shortlist view</span>
+          <span>Electronics &amp; Gadgets</span>
+          <span>Home &amp; Kitchen</span>
+          <span>Outdoor &amp; Sports</span>
+          <span>Car Accessories</span>
+          <span>Office &amp; Daily Use</span>
         </div>
       </article>
 
@@ -533,10 +535,15 @@
         </p>
         <ul>
           <li>
-            Use this page as a quick overview of items that may be worth a closer look.
+            Use the category chips or focus buttons to narrow down your view by
+            everyday usage.
           </li>
           <li>
-            Click <strong>"Read review"</strong> to open an on-page editorial-style note.
+            Use the search bar for ASIN, simple keywords or rough product names.
+          </li>
+          <li>
+            Click <strong>"Read review"</strong> to open an on-page editorial
+            style note.
           </li>
           <li>
             Click <strong>"Go to Amazon"</strong> to see full details, current
@@ -550,10 +557,22 @@
       </aside>
     </section>
 
-    <!-- 这一块现在只是隐藏的控制条（保留结构，方便你将来想恢复搜索/筛选） -->
     <section class="controls-bar">
       <div class="chip-row" id="categoryChips">
         <button class="chip active" data-category="All picks">All picks</button>
+        <button class="chip" data-category="Electronics &amp; Gadgets">
+          Electronics &amp; Gadgets
+        </button>
+        <button class="chip" data-category="Home &amp; Kitchen">Home &amp; Kitchen</button>
+        <button class="chip" data-category="Outdoor &amp; Sports">
+          Outdoor &amp; Sports
+        </button>
+        <button class="chip" data-category="Car Accessories">
+          Car Accessories
+        </button>
+        <button class="chip" data-category="Office &amp; Daily Use">
+          Office &amp; Daily Use
+        </button>
       </div>
 
       <div class="search-row">
@@ -561,7 +580,7 @@
           type="search"
           id="searchInput"
           class="search-input"
-          placeholder="Search on this page..."
+          placeholder="Search by title, category or ASIN on this page..."
         />
         <button class="btn-search" id="searchBtn">
           <span>Search</span>
@@ -570,7 +589,6 @@
       </div>
     </section>
 
-    <!-- 产品网格：JS 会自动从 Google Sheet 注入卡片 -->
     <section class="grid" id="productGrid"></section>
 
     <section class="info-grid">
@@ -578,13 +596,13 @@
         <h3>Buying guide: three quick checks before you order</h3>
         <ul>
           <li>
-            <strong>Usage context:</strong> daily, weekly or only on trips?
+            <strong>Usage context:</strong> will you use it daily, weekly or only on trips?
           </li>
           <li>
-            <strong>Budget tier:</strong> entry-level, mid-range or premium?
+            <strong>Budget tier:</strong> are you aiming for entry-level, mid-range or premium?
           </li>
           <li>
-            <strong>Top 2–3 priorities:</strong> comfort, durability,
+            <strong>Top 2–3 priorities:</strong> for example comfort, durability,
             speed, battery life or cleaning effort.
           </li>
         </ul>
@@ -644,7 +662,6 @@
     </section>
   </main>
 
-  <!-- Review Modal 保持原样，只是内容由 JS 自动生成 -->
   <div class="modal-backdrop" id="reviewModalBackdrop" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="reviewModalTitle">
       <button class="modal-close" id="reviewModalClose" aria-label="Close review window">
@@ -668,88 +685,119 @@
   </div>
 
   <script>
-    // === 核心配置 ===
-    const CURRENT_COUNTRY = "DE";
+    const AMAZON_DOMAIN = "www.amazon.de";
+    const AFFILIATE_TAG = "de0831-21";
 
-    // 你的 Google Sheet（保持不变）
-    const SHEET_CSV_URL =
-      "https://docs.google.com/spreadsheets/d/1XJ28joTagiKG-Td3oVWk0pWmWZycpHG0BNbokQkY3zQ/export?format=csv";
+    const baseCategories = ["Electronics", "Home", "Outdoor", "Car", "Office"];
 
-    const DOMAIN_MAP = {
-      US: "www.amazon.com",
-      UK: "www.amazon.co.uk",
-      DE: "www.amazon.de",
-      FR: "www.amazon.fr",
-      IT: "www.amazon.it",
-      ES: "www.amazon.es",
-      CA: "www.amazon.ca",
-      JP: "www.amazon.co.jp"
+    const rawProductsBase = [
+      { asin: "B0FPFP192S", image: "https://m.media-amazon.com/images/I/61iru8nZ6tL._AC_SY450_.jpg" },
+      { asin: "B0FKBPD3TS", image: "https://m.media-amazon.com/images/I/71PwMaq-32L._AC_SX425_.jpg" },
+      { asin: "B0FRFWXHT1", image: "https://m.media-amazon.com/images/I/71PCW4fHazL._AC_SX679_.jpg" },
+      { asin: "B0FRF5LYSR", image: "https://m.media-amazon.com/images/I/61AZYiunCgL._SX385_.jpg" },
+      { asin: "B0F6XTCQRB", image: "https://m.media-amazon.com/images/I/61z8VU-EivL._AC_SX679_.jpg" },
+      { asin: "B0FMQ2B5DL", image: "https://m.media-amazon.com/images/I/61zzp6YrhzL._AC_SY450_.jpg" },
+      { asin: "B0G1JT2PV4", image: "https://m.media-amazon.com/images/I/81O7mfqnklL._AC_SX679_.jpg" },
+      { asin: "B0FCMLJD1D", image: "https://m.media-amazon.com/images/I/71T9l13II9L._AC_SX679_.jpg" },
+      { asin: "B0FP8DP3TK", image: "https://m.media-amazon.com/images/I/51Rq-yBxWBL._AC_SY450_.jpg" },
+      { asin: "B0FCMKDTKR", image: "https://m.media-amazon.com/images/I/71yPbAExh8L._AC_SX679_.jpg" },
+      { asin: "B0FJ8CMWX6", image: "https://m.media-amazon.com/images/I/81JKkymPdKL._AC_SX679_.jpg" },
+      { asin: "B0FFN4QV78", image: "https://m.media-amazon.com/images/I/71psz4BNoBL._AC_SX679_.jpg" },
+      { asin: "B0FN8GK19M", image: "https://m.media-amazon.com/images/I/61IXxBfLHJL._AC_SY450_.jpg" },
+      { asin: "B0FHNXFCSR", image: "https://m.media-amazon.com/images/I/71+1Hp6XDWL._AC_SY450_.jpg" },
+      { asin: "B08GZ4CZ1P", image: "https://m.media-amazon.com/images/I/71dMLB-kGCL._AC_SX679_.jpg" },
+      { asin: "B0FRFXQF53", image: "https://m.media-amazon.com/images/I/81phDHFawRL._AC_SX679_.jpg" },
+      { asin: "B0F4XM6FVQ", image: "https://m.media-amazon.com/images/I/41E2c6fD-wL._AC_SX679_.jpg" },
+      { asin: "B0FQH3SP1C", image: "https://m.media-amazon.com/images/I/712REWbLXcL._AC_SX679_.jpg" },
+      { asin: "B0FV93GQKD", image: "https://m.media-amazon.com/images/I/619GBKs9pxL._AC_SX679_.jpg" },
+      { asin: "B0FZB1G9CJ", image: "https://m.media-amazon.com/images/I/51H2MoSoptL._AC_SX679_.jpg" },
+      { asin: "B0FR5N9CL7", image: "https://m.media-amazon.com/images/I/51YUnFYUewL._AC_SY450_.jpg" },
+      { asin: "B0FL27N8BS", image: "https://m.media-amazon.com/images/I/711F5D8K4+L._SY450_PIbundle-33,TopRight,0,0_AA450SH20_.jpg" },
+      { asin: "B0FMRMSY9J", image: "https://m.media-amazon.com/images/I/61nMpQlsXSL._AC_SX679_.jpg" },
+      { asin: "B0DMNZH78M", image: "https://m.media-amazon.com/images/I/61f3hB8HMfL._AC_SX425_.jpg" },
+      { asin: "B0D7ZSN3NL", image: "https://m.media-amazon.com/images/I/81m6+QXNsbL._AC_SX679_.jpg" },
+      { asin: "B0FRFRCHF8", image: "https://m.media-amazon.com/images/I/71q4YrzHSdL._AC_SX679_.jpg" },
+      { asin: "B0FBGPF61X", image: "https://m.media-amazon.com/images/I/717m4XIEv3L._AC_SX425_.jpg" },
+      { asin: "B0F6X7GKQQ", image: "https://m.media-amazon.com/images/I/51Z3aNxZPGL._AC_SX679_.jpg" },
+      { asin: "B0F7PG5G9L", image: "https://m.media-amazon.com/images/I/61ooTCQS9DL._AC_SY450_.jpg" },
+      { asin: "B0G1M1HSGG", image: "https://m.media-amazon.com/images/I/710vvBgcf3L._AC_SY575_.jpg" },
+      { asin: "B0DB21F9JC", image: "https://m.media-amazon.com/images/I/81q7BzyPcGL._AC_SX679_.jpg" },
+      { asin: "B0FL7LWWSM", image: "https://m.media-amazon.com/images/I/71YnqsX5oLL._AC_SY575_.jpg" },
+      { asin: "B0FLPTNVQN", image: "https://m.media-amazon.com/images/I/813bmg7mHhL._AC_SX679_.jpg" },
+      { asin: "B0FQNR72MD", image: "https://m.media-amazon.com/images/I/71tkU7m0C2L._AC_SX679_.jpg" },
+      { asin: "B0D62W4CS8", image: "https://f.media-amazon.com/images/I/61lzmP7uavL._AC_SY695_.jpg" },
+      { asin: "B0FJ1HC97K", image: "https://m.media-amazon.com/images/I/81-XX3eZuvL._AC_SX679_.jpg" },
+      { asin: "B0CHJ1NBHR", image: "https://m.media-amazon.com/images/I/81GiY0IYaHL._AC_SX425_.jpg" },
+      { asin: "B0FQMYTHZ8", image: "https://m.media-amazon.com/images/I/71gXieqjsJL._AC_SX679_.jpg" },
+      { asin: "B0F946T8DL", image: "https://m.media-amazon.com/images/I/61TMVzPYjVL._SX425_.jpg" },
+      { asin: "B0FKGP7DVQ", image: "https://m.media-amazon.com/images/I/71LyG8huTVL._AC_SX679_.jpg" },
+      { asin: "B0DXTPPMRW", image: "https://m.media-amazon.com/images/I/51Pg5D9YBNL._AC_SX679_.jpg" },
+      { asin: "B0FJFCYBH7", image: "https://m.media-amazon.com/images/I/81PfC1VxSkL._AC_SY450_.jpg" },
+      { asin: "B0FDWS6JS9", image: "https://m.media-amazon.com/images/I/81J+VK6MkgL._AC_SX679_.jpg" },
+      { asin: "B0FNPVPD2D", image: "https://m.media-amazon.com/images/I/71VaVcKYZeL._SX425_.jpg" },
+      { asin: "B0D63F2CXR", image: "https://f.media-amazon.com/images/I/719jZLJStQL._AC_SX679_.jpg" },
+      { asin: "B0FM4BVCGP", image: "https://m.media-amazon.com/images/I/71Mj0QpIBwL._AC_SY300_SX300_QL70_ML2_.jpg" },
+      { asin: "B0DL5CKG31", image: "https://m.media-amazon.com/images/I/71ZEs3UlhBL._AC_SX679_.jpg" },
+      { asin: "B0FQC1FR98", image: "https://m.media-amazon.com/images/I/81sRZ6gkbWL._AC_SX679_.jpg" },
+      { asin: "B0FQ55HY31", image: "https://m.media-amazon.com/images/I/61sjRYKGf7L._AC_SX679_.jpg" },
+      { asin: "B0FQ54YRR4", image: "https://m.media-amazon.com/images/I/61OAZRKfjIL._AC_SX679_.jpg" },
+      { asin: "B0FM7V7S5Z", image: "https://m.media-amazon.com/images/I/71Pm2H2b0wL._AC_SX679_.jpg" },
+      { asin: "B09HQH477J", image: "https://m.media-amazon.com/images/I/61EmNELCkWL._AC_SX425_.jpg" },
+      { asin: "B0FLCPY45R", image: "https://m.media-amazon.com/images/I/61v06M28f-L._AC_SY879_.jpg" }
+    ];
+
+    const rawProducts = rawProductsBase.map((p, index) => ({
+      id: index + 1,
+      asin: p.asin,
+      image: p.image,
+      category: baseCategories[index % baseCategories.length]
+    }));
+
+    const CATEGORY_MAP = {
+      Electronics: "Electronics & Gadgets",
+      Audio: "Electronics & Gadgets",
+      Home: "Home & Kitchen",
+      Kitchen: "Home & Kitchen",
+      Outdoor: "Outdoor & Sports",
+      Sports: "Outdoor & Sports",
+      Car: "Car Accessories",
+      Office: "Office & Daily Use",
+      Other: "Office & Daily Use"
     };
 
-    const TRACKING_IDS = {
-      US: "us1987-20",
-      UK: "uk0e42-21",
-      DE: "de0831-21",
-      FR: "alliance1980d-21",
-      IT: "alliance19805-21",
-      ES: "es072-21",
-      CA: "alliance0dd-20",
-      JP: "alliance1987-22"
-    };
-
-    function getCurrencySymbol(countryCode) {
-      const cc = (countryCode || "").toUpperCase();
-      if (["DE", "FR", "IT", "ES"].includes(cc)) return "€";
-      if (cc === "UK") return "£";
-      if (cc === "US") return "$";
-      if (cc === "CA") return "CA$";
-      if (cc === "JP") return "¥";
-      return "";
-    }
-
-    function formatPrice(rawPrice, countryCode) {
-      if (!rawPrice) return "";
-      const num = Number(String(rawPrice).replace(",", "."));
-      if (Number.isNaN(num)) return "";
-      const symbol = getCurrencySymbol(countryCode);
-      if (countryCode === "JP") {
-        return symbol + Math.round(num);
-      }
-      return symbol + num.toFixed(2);
-    }
-
-    function buildAffiliateUrl(asin, countryCode) {
-      const cc = (countryCode || "").toUpperCase();
-      const domain = DOMAIN_MAP[cc];
-      const tag = TRACKING_IDS[cc];
-      if (!asin || !domain || !tag) return "#";
-      return `https://${domain}/dp/${encodeURIComponent(asin)}?tag=${encodeURIComponent(
-        tag
-      )}`;
-    }
-
-    // 简单 CSV 解析（要求你在 Sheet 里不要用逗号分隔的复杂内容）
-    function parseCsv(text) {
-      const lines = text.trim().split(/\r?\n/);
-      if (!lines.length) return [];
-      const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
-      const rows = [];
-
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i];
-        if (!line.trim()) continue;
-        const cols = line.split(",");
-        const obj = {};
-        headers.forEach((h, idx) => {
-          obj[h] = (cols[idx] || "").trim();
-        });
-        rows.push(obj);
-      }
-      return rows;
-    }
+    const products = rawProducts.map((p, index) => {
+      const broadCat = CATEGORY_MAP[p.category] || "Office & Daily Use";
+      const title = `Product #${index + 1} – ${broadCat} Pick`;
+      const hook =
+        `This pick is designed as a practical option in the ${broadCat.toLowerCase()} space for German shoppers, balancing everyday performance and value.`;
+      const details =
+        "Use this shortlist as a quick way to spot products that may deserve a closer look on Amazon.de. Each card focuses on simple fit, features and everyday German use rather than chasing extreme specs.";
+      const approxPriceLabel = "Check live price on Amazon.de";
+      const amazonUrl = `https://${AMAZON_DOMAIN}/dp/${p.asin}/?tag=${AFFILIATE_TAG}`;
+      const reviewText =
+        `${title}\n\n` +
+        `This Germany-focused editorial note highlights key reasons why this item might be a good fit:\n` +
+        `• Everyday use: aimed at typical home or personal use rather than specialist scenarios.\n` +
+        `• Effort vs. benefit: chosen where setup, maintenance and day-to-day use feel reasonable for most people.\n` +
+        `• Value: not always the absolute cheapest, but offering a sensible balance of features for the price.\n\n` +
+        `Always open the full Amazon.de product page to check the latest details, compatibility notes and customer reviews before you decide.`;
+      return {
+        ...p,
+        broadCategory: broadCat,
+        title,
+        hook,
+        details,
+        approxPriceLabel,
+        amazonUrl,
+        reviewText
+      };
+    });
 
     const gridEl = document.getElementById("productGrid");
     const countEl = document.getElementById("productCount");
+    const searchInput = document.getElementById("searchInput");
+    const searchBtn = document.getElementById("searchBtn");
+    const chipsContainer = document.getElementById("categoryChips");
 
     const modalBackdrop = document.getElementById("reviewModalBackdrop");
     const modalTitle = document.getElementById("reviewModalTitle");
@@ -758,138 +806,105 @@
     const modalClose = document.getElementById("reviewModalClose");
     const modalDismiss = document.getElementById("reviewModalDismiss");
 
-    let products = [];
+    let activeCategory = "All picks";
+    let searchTerm = "";
 
     function renderProducts(list) {
-      if (!gridEl) return;
       gridEl.innerHTML = "";
-
       if (!list.length) {
         gridEl.innerHTML =
-          '<div style="font-size:0.85rem;color:#6b7280;padding:10px 4px;">No products found for this country. Please check your Google Sheet (country=DE).</div>';
-        if (countEl) countEl.textContent = "Showing 0 products";
-        return;
+          '<div style="font-size:0.85rem;color:#6b7280;padding:10px 4px;">No products match your current filters. Try clearing the search or choosing “All picks”.</div>';
+      } else {
+        list.forEach((p) => {
+          const card = document.createElement("article");
+          card.className = "product-card";
+          card.innerHTML = `
+            <div class="product-card_media">
+              <img src="${p.image}" alt="${p.title}" loading="lazy" />
+            </div>
+            <div class="product-card_body">
+              <div class="product-card_meta">
+                <span class="meta-cat">${p.broadCategory}</span>
+                <span class="meta-asin">ASIN: ${p.asin}</span>
+              </div>
+              <h3 class="product-card_title">${p.title}</h3>
+              <p class="product-card_hook">${p.hook}</p>
+              <p class="product-card_desc">${p.details}</p>
+            </div>
+            <div class="product-card_footer">
+              <div class="product-card_price">${p.approxPriceLabel}</div>
+              <div class="product-card_actions">
+                <button class="btn btn-secondary" data-action="review" data-asin="${p.asin}">
+                  Read review
+                </button>
+                <a class="btn btn-primary" href="${p.amazonUrl}" target="_blank" rel="nofollow noopener sponsored">
+                  Go to Amazon
+                </a>
+              </div>
+            </div>
+          `;
+          gridEl.appendChild(card);
+        });
       }
-
-      list.forEach((p) => {
-        const card = document.createElement("article");
-        card.className = "product-card";
-
-        const subtitleTag = p.shortTag || "Everyday pick for DE shoppers";
-
-        card.innerHTML = `
-          <div class="product-card_media">
-            <img src="${p.image}" alt="${p.title}" loading="lazy" />
-          </div>
-          <div class="product-card_body">
-            <div class="product-card_meta">
-              <span class="meta-cat">${subtitleTag}</span>
-              <span class="meta-asin">ASIN: ${p.asin}</span>
-            </div>
-            <h3 class="product-card_title">
-              ${p.title}
-            </h3>
-            <p class="product-card_hook">${p.hook}</p>
-            <p class="product-card_desc">${p.details}</p>
-          </div>
-          <div class="product-card_footer">
-            <div class="product-card_price">${p.priceLabel}</div>
-            <div class="product-card_actions">
-              <button class="btn" data-action="review" data-asin="${p.asin}">
-                Read review
-              </button>
-              <a class="btn btn-primary" href="${p.amazonUrl}" target="_blank" rel="nofollow noopener sponsored">
-                Go to Amazon
-              </a>
-            </div>
-          </div>
-        `;
-        gridEl.appendChild(card);
-      });
-
       if (countEl) {
         countEl.textContent = `Showing ${list.length} products`;
       }
     }
 
-    function buildAutoText(title, formattedPrice, countryCode) {
-      const shortTag = "Everyday pick";
-      const hook =
-        "Practical everyday option for typical home or office use on Amazon.de.";
-      const details =
-        "Use this card as a quick snapshot: it highlights simple fit, features and everyday use. Always open the live Amazon.de page to confirm full specs, variants and up-to-date reviews before you decide.";
-      const priceLabel = formattedPrice
-        ? `Price: ${formattedPrice} (check live on Amazon.de)`
-        : "Check live price on Amazon.de";
-
-      const reviewText =
-        `${title}\n\n` +
-        `Highlights:\n` +
-        `• Practical everyday pick for typical home or office use.\n` +
-        `• Aims for a sensible balance of features and price.\n` +
-        `• Best for shoppers who prefer a simple, no-drama choice.\n\n` +
-        `Price and availability can change at any time. ` +
-        `Always check the live Amazon.de product page for full details, specs and up-to-date customer reviews before you decide.`;
-
-      return { shortTag, hook, details, priceLabel, reviewText };
+    function getFilteredProducts() {
+      const term = searchTerm.trim().toLowerCase();
+      return products.filter((p) => {
+        const matchesCategory =
+          activeCategory === "All picks" || p.broadCategory === activeCategory;
+        const haystack = `${p.title} ${p.asin} ${p.broadCategory} ${p.category}`.toLowerCase();
+        const matchesSearch = !term || haystack.includes(term);
+        return matchesCategory && matchesSearch;
+      });
     }
 
-    async function loadProducts() {
-      if (gridEl) {
-        gridEl.innerHTML =
-          '<div style="font-size:0.85rem;color:#6b7280;padding:10px 4px;">Loading products from Google Sheet…</div>';
-      }
-      try {
-        const res = await fetch(SHEET_CSV_URL);
-        const text = await res.text();
-        const rows = parseCsv(text);
+    function applyFilters() { renderProducts(getFilteredProducts()); }
 
-        const filtered = rows.filter(
-          (row) => (row.country || "").toUpperCase() === CURRENT_COUNTRY
-        );
-
-        products = filtered
-          .filter((row) => row.asin)
-          .map((row, index) => {
-            const asin = row.asin.trim();
-            const title =
-              row.title && row.title.trim()
-                ? row.title.trim()
-                : `Product #${index + 1}`;
-            const formattedPrice = formatPrice(row.price, CURRENT_COUNTRY);
-            const amazonUrl = buildAffiliateUrl(asin, CURRENT_COUNTRY);
-            const auto = buildAutoText(title, formattedPrice, CURRENT_COUNTRY);
-
-            return {
-              asin,
-              title,
-              image: row.image || "",
-              amazonUrl,
-              formattedPrice,
-              shortTag: auto.shortTag,
-              hook: auto.hook,
-              details: auto.details,
-              priceLabel: auto.priceLabel,
-              reviewText: auto.reviewText
-            };
-          });
-
-        renderProducts(products);
-      } catch (err) {
-        console.error(err);
-        if (gridEl) {
-          gridEl.innerHTML =
-            '<div style="font-size:0.85rem;color:#b91c1c;padding:10px 4px;">Error loading products from Google Sheet. Please retry or check sharing settings.</div>';
-        }
-        if (countEl) countEl.textContent = "Showing 0 products";
-      }
+    function setActiveChip(categoryLabel) {
+      activeCategory = categoryLabel;
+      const chips = chipsContainer.querySelectorAll(".chip");
+      chips.forEach((chip) => {
+        chip.classList.toggle("active", chip.dataset.category === categoryLabel);
+      });
+      applyFilters();
     }
+
+    chipsContainer.addEventListener("click", (e) => {
+      const btn = e.target.closest(".chip");
+      if (!btn) return;
+      const cat = btn.dataset.category;
+      if (cat) setActiveChip(cat);
+    });
+
+    function handleSearch() {
+      searchTerm = searchInput.value || "";
+      applyFilters();
+    }
+
+    searchBtn.addEventListener("click", handleSearch);
+    searchInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") handleSearch();
+    });
+
+    gridEl.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-action='review']");
+      if (!btn) return;
+      const asin = btn.dataset.asin;
+      const product = products.find((p) => p.asin === asin);
+      if (product) openReviewModal(product);
+    });
 
     function openReviewModal(product) {
-      if (!product) return;
-      modalTitle.textContent = product.title;
+      modalTitle.textContent = product.title.replace(
+        "Pick",
+        "– Selected item from Amazon.de"
+      );
       modalBody.textContent = product.reviewText;
-      modalAmazonLink.href = product.amazonUrl || "#";
+      modalAmazonLink.href = product.amazonUrl;
       modalBackdrop.classList.add("visible");
       modalBackdrop.setAttribute("aria-hidden", "false");
     }
@@ -899,7 +914,6 @@
       modalBackdrop.setAttribute("aria-hidden", "true");
     }
 
-    // 绑定 Modal 事件
     modalClose.addEventListener("click", closeReviewModal);
     modalDismiss.addEventListener("click", closeReviewModal);
     modalBackdrop.addEventListener("click", (e) => {
@@ -909,16 +923,7 @@
       if (e.key === "Escape") closeReviewModal();
     });
 
-    // 绑定卡片上的 "Read review"
-    gridEl.addEventListener("click", (e) => {
-      const btn = e.target.closest("button[data-action='review']");
-      if (!btn) return;
-      const asin = btn.getAttribute("data-asin");
-      const product = products.find((p) => p.asin === asin);
-      openReviewModal(product);
-    });
-
-    document.addEventListener("DOMContentLoaded", loadProducts);
+    renderProducts(products);
   </script>
 </body>
 </html>
